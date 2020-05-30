@@ -3,8 +3,8 @@ const Credentials = require('./credentialss'), // Include our credentials
     vo = require('vo'),
     nightmare = Nightmare({show: true}),
     domain = 'https://facebook.com',      // Initial navigation domain
-    groups = ['https://www.facebook.com/groups/394556737385005/?sorting_setting=RECENT_ACTIVITY', // Scrapable group array
-        'https://www.facebook.com/groups/391908637633014/?sorting_setting=RECENT_ACTIVITY'];
+    groups = ['https://www.facebook.com/groups/785863974804742/?sorting_setting=RECENT_ACTIVITY']; // Scrapable group array
+        //'https://www.facebook.com/groups/391908637633014/?sorting_setting=RECENT_ACTIVITY'];
 
 // add console logging - makes life a bit easier
 nightmare
@@ -16,8 +16,8 @@ nightmare
     .goto(domain)
     .type('input[id="email"]', Credentials.facebook_username)
     .type('input[id="pass"]', Credentials.facebook_password)
-    .click('#loginbutton>input')
-    .wait(3000) // will wait 3 seconds to load next page
+    .click('input[value="Log In"]')
+    .wait(30000) // will wait 3 seconds to load next page
     .then(() => {
         var run = function* () {
             for (var i = 0; groups.length > i; i++) {
