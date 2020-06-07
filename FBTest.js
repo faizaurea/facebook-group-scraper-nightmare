@@ -1,9 +1,13 @@
 const Credentials = require('./credentialss'), // Include our credentials
 Nightmare = require('nightmare'),
 vo = require('vo'),
+fs = require('fs'),
+path = require('path'),
 cheerio = require('cheerio'),
 nightmare = Nightmare({show: true}),
 domain = 'https://facebook.com',      // Initial navigation domain
+dirPath = '/Users/faiz/Documents/Faiz/Personal/Projects/FB Groups/Sanchari';
+permalinkBaseUrl = 'https://www.facebook.com/groups/TeamSanchari/permalink/', //permalink Base Url
 group = 'https://www.facebook.com/groups/785863974804742/?sorting_setting=RECENT_ACTIVITY'; //group to be scraped.
 
 let scrollTimes = [1, 2];
@@ -120,15 +124,106 @@ if(docHeight != 0)
         {
             //iterate over the links to extract the facebook posts.
             console.log('iterating over facebook posts');
-            permalinksArr.reduce((accumulator, currentValue, currentIndex, array) => {
+            permalinksArr.reduce((accumulator, currentUrl, currentIndex, array) => {
                 return accumulator.then(() => {
-                    console.log(currentValue);
+                    console.log(currentUrl);
 
                     return nightmare
-                    .goto(currentValue)
+                    .goto(currentUrl)
                     .wait(20000)
+                    .inject('js', './node_modules/jquery/dist/jquery.js')
+                    .evaluate(()=>{
+                       //extract post content in html format
+                       console.log('inside evaluete method, extract post content');
+                       var postContent =  $('.userContent').html();
+
+                       //Extract total count of photos uploaded
+                       var imgHyperLinks = $('a[data-render-location="group_permalink"]');
+                       var totalImageCount = 0;
+
+                        if(imgHyperLinks.length)
+                        {
+                            //set the count of images, assuning there are no additional images
+                            totalImageCount = imgHyperLinks.length;
+
+                            var lastHyperLinkIndex = imgHyperLinks.length - 1;
+                            var div = $(imgHyperLinks[lastHyperLinkIndex]).find('div');
+                            if(div.length)
+                            {
+                                var lastImgIndex = div.length - 1;
+                                var totalImageCountText = $(div[lastImgIndex]).text();
+
+                                //Remove the + from the totalImageCountText
+                                 if(totalImageCountText.indexOf('+') > -1)
+                                 {
+                                     var plusIndex = totalImageCountText.indexOf('+');
+                                     if(plusIndex < totalImageCountText.length)
+                                     {
+                                        var imageCount = totalImageCountText.substring(plusIndex+1, totalImageCountText.length);
+                                        totalImageCount = (imgHyperLinks.length - 1) + parseInt(imageCount);
+                                        console.log(imageCount);
+                                     }
+                                     else
+                                     {
+                                         console.log('No plus sign in count');
+                                     }
+                                 }
+                                 else
+                                 {
+                                     console.log('No additional images');
+                                 }
+                            }
+                            else
+                            {
+                                console.log('no additional div');
+                            }
+                        }
+                        else
+                        {
+                            console.log('No images exists');
+                        }
+
+                       var response = {post: postContent, totalPhotos: totalImageCount}
+                       return response;
+                    })
+                    .then((res) => {
+                        //save post to local storage
+                        //extract post id from url
+                        console.log('Extracting Post ID');
+                        var postId = currentUrl.substring(permalinkBaseUrl.length, currentUrl.length - 1); //-1 removes / from the link
+                        console.log('Post ID:' + postId);
+                        console.log('Total Photos Uploaded: ' + res.totalPhotos);
+
+                        //Create Folder and save to local storage
+                        var postDirPath = path.join(dirPath, postId);
+                        fs.mkdir(postDirPath, { recursive: true }, (err) => {
+                            if(!err)
+                            {
+                                console.log(postId + ' dir succesfully created');
+
+                                var file = path.join(postDirPath, postId +'.html');
+                                fs.writeFile(file, res.post, (err) => {
+                                    if(!err)
+                                    {
+                                        console.log(postId + ' succesfully created');
+                                    }
+                                    else
+                                    {
+                                        console.log(postId + ' failed creating file'); 
+                                        console.log(err);
+                                    }
+                                })
+                            }
+                            else
+                            {
+                                console.log(postId + ' failed creating dir'); 
+                                console.log(err);
+                            }
+                        }); //create directory
+                    })
                     .catch((error) => {
-                        console.log(error);
+                        
+                        console.log('Error: ' + error);
                     })
                 });
             }, Promise.resolve([]));
