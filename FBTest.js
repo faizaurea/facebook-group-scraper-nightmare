@@ -2,6 +2,7 @@ const Credentials = require('./credentialss'), // Include our credentials
 Nightmare = require('nightmare'),
 vo = require('vo'),
 fs = require('fs'),
+axios = require('axios'),
 path = require('path'),
 cheerio = require('cheerio'),
 nightmare = Nightmare({show: true}),
@@ -128,6 +129,8 @@ if(docHeight != 0)
                 return accumulator.then(() => {
                     console.log(currentUrl);
 
+                    let post = {Error: ''};
+
                     return nightmare
                     .goto(currentUrl)
                     .wait(20000)
@@ -140,11 +143,13 @@ if(docHeight != 0)
                        //Extract total count of photos uploaded
                        var imgHyperLinks = $('a[data-render-location="group_permalink"]');
                        var totalImageCount = 0;
+                       var imgHyperLinkUrl = '';
 
                         if(imgHyperLinks.length)
                         {
                             //set the count of images, assuning there are no additional images
                             totalImageCount = imgHyperLinks.length;
+                            imgHyperLinkUrl = $(imgHyperLinks[0]).attr('href');
 
                             var lastHyperLinkIndex = imgHyperLinks.length - 1;
                             var div = $(imgHyperLinks[lastHyperLinkIndex]).find('div');
@@ -183,7 +188,7 @@ if(docHeight != 0)
                             console.log('No images exists');
                         }
 
-                       var response = {post: postContent, totalPhotos: totalImageCount}
+                       var response = {post: postContent, totalPhotos: totalImageCount, imgHyperLinkUrl: imgHyperLinkUrl};
                        return response;
                     })
                     .then((res) => {
@@ -196,16 +201,22 @@ if(docHeight != 0)
 
                         //Create Folder and save to local storage
                         var postDirPath = path.join(dirPath, postId);
+
+                        //create post
+                        post = {PostID: postId, Url: currentUrl, PostDirPath: postDirPath, TotalPhotos: res.totalPhotos, ImgHyperlinkUrl: res.imgHyperLinkUrl, DirectoryCreated: false, PostSaved: false, Error: ''};
+
                         fs.mkdir(postDirPath, { recursive: true }, (err) => {
                             if(!err)
                             {
                                 console.log(postId + ' dir succesfully created');
+                                post.DirectoryCreated = true;
 
                                 var file = path.join(postDirPath, postId +'.html');
                                 fs.writeFile(file, res.post, (err) => {
                                     if(!err)
                                     {
                                         console.log(postId + ' succesfully created');
+                                        post.PostSaved = true;
                                     }
                                     else
                                     {
@@ -219,13 +230,116 @@ if(docHeight != 0)
                                 console.log(postId + ' failed creating dir'); 
                                 console.log(err);
                             }
-                        }); //create directory
+                        }); //create directory end
+
+                        return post;
                     })
                     .catch((error) => {
-                        
                         console.log('Error: ' + error);
+                        post.Error = error;
+                        return post;
                     })
-                });
+                }).then((post) => {
+
+                    console.log('post: ' + post)
+                    if(!post.Error)
+                    {
+                        if(post.TotalPhotos > 1)
+                        {
+                            //create an array with the length equivalent to the no. of photos uploaded
+                            let photos = [];
+                            for(i=0; i < post.TotalPhotos; i++)
+                            {
+                                photos.push(i);
+                            }
+                            console.log('Photos Array Length: ' + photos.length);
+
+                            return photos.reduce((accumulator, currentValue, currentIndex, totalPhotos) => {
+                                console.log('Iterating images ' + currentValue);
+                                return accumulator.then(() => {
+
+                                    if(currentValue == 0)
+                                    {
+                                        console.log('executing ' + currentValue);
+
+                                        return nightmare
+                                                .goto(post.ImgHyperlinkUrl)
+                                                .wait(20000)
+                                                .inject('js', './node_modules/jquery/dist/jquery.js')
+                                                //.click('a[title="Next"]')
+                                                //.wait(20000)
+                                                .evaluate(() => {
+                                                    console.log('evaluating image');
+                                                    let imgSrc = $('img[class="spotlight"]').attr('src');
+                                                    console.log('Image Source : ' + imgSrc);
+                                                    return imgSrc;
+                                                })
+                                                .then((imgSrc) => {
+                                                    console.log('saving image to directory : ' +post.PostDirPath);
+                                                    axios({
+                                                        url: imgSrc,
+                                                        method: 'GET',
+                                                        responseType: 'stream'
+                                                    }).then((response) => {
+                                                        var imgPath = path.join(post.PostDirPath, currentValue +'.jpg');
+                                                        response.data.pipe(fs.createWriteStream(imgPath))
+                                                        .on('finish', () => {
+                                                            console.log(imgSrc + ' successfully downloaded');
+                                                            console.log(imgPath + ' downloded');
+                                                        })
+                                                        .on('error', (error) => {
+                                                            console.log('Error downloading ' + imgPath);
+                                                            console.log(error);
+                                                        })
+                                                    })
+                                                })
+                                                .catch((error) => {
+                                                    console.log('inside catch')
+                                                    console.log(error);
+                                                });
+                                    }
+                                    else
+                                    {
+                                        console.log('executing ' + currentValue);
+
+                                            return nightmare
+                                                    .wait(20000)
+                                                    .click('a[title="Next"]')
+                                                    .wait(20000)
+                                                    .evaluate(() => {
+                                                        let imgSrc = $('img[class="spotlight"]').attr('src');
+                                                        return imgSrc;
+                                                    })
+                                                    .then((imgSrc) => {
+                                                        axios({
+                                                            url: imgSrc,
+                                                            method: 'GET',
+                                                            responseType: 'stream'
+                                                        }).then((response) => {
+                                                            var imgPath = path.join(post.PostDirPath, currentValue +'.jpg');
+                                                            response.data.pipe(fs.createWriteStream(imgPath))
+                                                            .on('finish', () => {
+                                                                console.log(imgSrc + ' successfully downloaded');
+                                                                console.log(imgPath + ' downloded');
+                                                            })
+                                                            .on('error', (error) => {
+                                                                console.log('Error downloading ' + imgPath);
+                                                                console.log(error);
+                                                            })
+                                                        })
+                                                    })
+                                                    //.click('a[title="Next"]')
+                                                    //.wait(20000)
+                                                    .catch((error) => {
+                                                        console.log('inside catch')
+                                                        console.log(error);
+                                                    });
+                                        }
+                                })
+                            }, Promise.resolve([]));
+                        }
+                    }
+                })
             }, Promise.resolve([]));
         }
         else
