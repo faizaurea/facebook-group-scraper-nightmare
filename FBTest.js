@@ -5,6 +5,7 @@ fs = require('fs'),
 axios = require('axios'),
 path = require('path'),
 cheerio = require('cheerio'),
+jquery = require('jquery'),
 nightmare = Nightmare({show: true}),
 domain = 'https://facebook.com',      // Initial navigation domain
 dirPath = '/Users/faiz/Documents/Faiz/Personal/Projects/FB Groups/Sanchari';
@@ -105,13 +106,23 @@ if(docHeight != 0)
             permalinks = $("a[href^='/groups/TeamSanchari/permalink/']");
             console.log('permalinks length: ' + permalinks.length);
 
+            //remove duplicates if any
+        
+            //let uniquePermaLinks = jquery.uniqueSort(permalinks); 
+
             //iterate to generate an array
             let postUrls = [];
             $(permalinks).each((i, link) => {
                 var href = 'https://facebook.com/' + $(link).attr('href');
                 console.log('href: ' + href);
-                postUrls.push(href);
+                
+                if(postUrls.indexOf(href) == -1)
+                {
+                    postUrls.push(href);
+                }
             })
+
+            console.log('Post Urls :' + postUrls.length);
 
             //var $ = cheerio.load(permalinks[1]);
             //console.log('permalink url: ' + $('a').attr('href'));
